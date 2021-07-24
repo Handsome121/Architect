@@ -1,0 +1,190 @@
+一、day05
+1.上午
+   django+celery  ,将验证码的短信发送由同步修改异步。
+   1.1 在与settings.py的同一目录下，添加了celery.py文件，创建和配置app，并且app能够
+         自动发现应用下的任务函数。
+   1.2 在某一应用下创建tasks.py文件，文件中编写任务函数
+   1.3 启动消费者进程
+        在项目的根目录下：
+        celery -A ddblog worker -l info
+   1.4 在视图函数中，投递任务 (生产者)
+         任务函数.delay(参数...)
+   1.5 在浏览器中，操作，以触发视图函数的调用。 
+    
+         
+2.下午
+ 
+   （一） 、 发表博客文章
+   1. 用户在地址输入url: http://127.0.0.1:5000/tedu/topic/release,响应页面是release.html
+   2. 分析release.html
+       页面<body>标签内容是空的，完全通过ajax向后端发送异步请求获取数据，拼接出来。
+       ajax同步请求的 url: http://127.0.0.1:8000/v1/users/"+ username  ,username 从本地
+       存储中读取，请求前，向服务器发送token。
+
+      $('#button').on('click', function(){
+
+             # 获取富文本框的内容（带格式，所谓的格式就是html标签）   <h1>文本</h> 
+             var content = editor.txt.html()
+             # 获取富文本框的内容(不带格式，为了截取数据准备的，文章内容截取前30个字符作为文章简介)
+             var content_text = editor.txt.text()
+      }
+      点击提交按钮时，向后端发送异步请求，请求方式是POST，请求url：
+      "http://127.0.0.1:8000/v1/topics/" + username,
+       如果发布成功，在前端重定向到文章列表页面：
+        window.location.href = '/' + username + '/topics'
+    3. 编写后端的url，并编写对应的视图类或视图函数
+        
+   （二） 、博客文章列表显示
+       用户输入url: http://127.0.0.1:5000/tedu/topics ，返回list.html页面
+       1. list.html页面的分析
+           username -本地存储的用户名称
+           blog_username - 地址栏获取的用户名称
+           url: "http://127.0.0.1:8000/v1/topics/"+ blog_username + "?" + query_set;
+           
+
+           get 请求，获取某个用户发表的所有博客文章
+       2. 在后端实现get方法
+           读取某一用户所有的文章，以Json格式封装并返回
+
+       3. 细节问题
+           3.1 时间问题
+                使用django中的模板：数据库中使用标准时间，模板中是根据时区调整后的时间。
+                现在前后端分离了，所以这时，数据库中使用对应时区的时间。
+                zaisettings.py中 USE_TZ = False
+
+           3.2 登录后，跳转到博客列表
+
+           3.3 发表博客(考虑安全问题，跨站脚本攻击)
+                title = html.escape(title) 
+                富文本框会自动转义
+                 
+二 day06 
+    1. 博客详情页
+        用户在地址输入: http://127.0.0.1:5000/tedu/topics/detail/1,进入博客详情页
+    2. 分析 博客详情页detail.html
+        向后端发送ajax请求，请求方式是get，请求的url是：
+        http://127.0.0.1:8000/v1/topics/" + blog_username + '?t_id=' + t_id
+        其中 blog_username 变量从地址栏获取，请求前，也向后端发送了token。
+    3.  根据url，编写对应的视图函数
+             
+博客列表页的url: "http://127.0.0.1:8000/v1/topics/"+ blog_username + "?" + query_set;
+博客列表页的url: "http://127.0.0.1:8000/v1/topics/"+ blog_username;  
+
+博客详情页的url:  http://127.0.0.1:8000/v1/topics/" + blog_username + '?t_id=' + t_id
+        两个使用的是同一个get方法，如何区分是列表页还是详情页？
+        # t_id就是博客文章的id
+        t_id = request.GET.get('t_id')
+        if t_id:
+           # 获取详情页的数据   get   ，拿到一个topic对象，用make_topic_res函数封装成前                          端需要的json格式，返回。
+        else:
+          # 获取列表页的数据    filter ，拿到QuerySet之后，用make_topics_res函数封装成前             端需要的json格式，返回。
+         405 错误，url找不到对应的视图类的方法
+     4. 上一篇、下一篇文章的问题
+         topic_topic表中存储了所有用户的文章，包括公开和私有。
+         id =[1  3  4 【6】7 8 10] 是tedu的文章，再考虑公开和私有，更不可能连续了。
+         id =[2 5 9 11 12] 是tedu2的文章
+         不能通过文章id做加减运算找对应的上一篇和下一篇文章。
+         考虑通过sql语句怎么找？
+         next:
+         select * from topic_topic where  id>6 and user_profie_id='tedu' order by id asc
+         limit 1  
+         next_topic = Topic.objects.filter(id__gt = author_topic.id,user_profile_id = author.username).first()
+        last:
+        last_topic = Topic.objects.filter(id__lt = author_topic.id,user_profile_id = author.username) .last() 
+
+    5. 缓存博客列表页？如何缓存 day07      
+        5.1 考虑使用 Django提供的装饰器 cache_page
+              如果重启系统，很有可能哨兵服务又启动，再次会将6379设置为从。首先关闭
+              哨兵服务，然后，
+              redis-cli,进入redis终端：  slaveof no one  ，这样的话6379不是任何服务的从，
+              可读可写。
+        5.2  直接使用 cache_page，第一次访问时，是博主访问自己，会将所有(包括个人文章)
+               全部缓存，假设缓存指定的有效期是10分钟。这时，非博主访问博客列表时，缓存               在有效期内，直接访问缓存，把个人文章也显示出来。这就违背了我们的功能。
+               无法通过代码灵活的删除键，只能等它有效期结束。
+               总之，没有办法使用通用的装饰器 cache_page，来解决我们个性化的需求。
+        5.3  我们自定义装饰器
+               5.3.1 分析需要几个不同的缓存数据：
+                        前缀：博主访问和非博主访问             两种
+                                  topic_cache_self_             博主访问
+                                  topic_cache_                    非博主访问
+
+                        后缀：request.get_full_path()           三种
+                                  tedu/topics             所有分类
+                                  tedu/topics?category = tec     技术分类
+                                  tedu/topics?category = no-tec   非技术
+                        一共有6种key，6份缓存。
+
+
+               5.3.2  当对博客文章做增删改，需要删除缓存       【15:40回来】
+                         在post方法中清除缓存
+
+                          topic_cache_self         tedu/topics  
+                          topic_cache_self         tedu/topics      ?category = tec 
+                          topic_cache_self         tedu/topics      ?category = no-tec
+
+                          topic_cache_              tedu/topics  
+                          topic_cache_              tedu/topics     ?category = tec 
+                          topic_cache_              tedu/topics     ?category = no-tec
+                          
+                         ['topic_cache_self_/v1/topics/tedu', 
+                          'topic_cache_self_/v1/topics/tedu?category=tec',                                                                'topic_cache_self_/v1/topics/tedu?category=no-tec',                                                         'topic_cache_/v1/topics/tedu', 
+                          'topic_cache_/v1/topics/tedu?category=tec',                                                                       'topic_cache_/v1/topics/tedu?category=no-tec'
+                         ]
+                       
+                        每一个视图函数都有一个固定的参数 request，path函数第一个参数url
+                        中使用了path转换器 <str:author_id>,把参数传给它对应的视图函数。
+                        我们使用装饰器修饰了get方法，所以，request，author_id这个参数先
+                        传递给我们的装饰器函数，通过关键字传参，我们这句代码
+                        author_id = kwargs['author_id']，就会接收到author_id参数。
+
+      6 评论模块
+         提交按钮发送ajax请求，请求方式是POST，请求的url:
+         url:"http://127.0.0.1:8000/v1/messages/" + t_id ,
+         
+                            
+
+                                   
+         
+                     
+          
+        
+        
+
+
+
+    
+          
+
+   
+            
+        
+                       
+         
+    
+                   
+     
+   
+                                  
+                           
+                 
+   
+    
+   
+   
+
+
+
+
+
+ 
+
+
+   
+
+
+
+
+
+
+
+

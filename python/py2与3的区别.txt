@@ -1,0 +1,27 @@
+ 0不等于<>比较运算符，python3不识别，pyhon2.7中!=和<>都能运行。
+
+print函数的使用，python3必须加括号，python2加不加都行。
+
+py2 的默认编码是ASCII，py3的默认编码是Unicode(UTF-8)。 支持中文
+
+用户输入不同，py3中只有input()输出都是str和py2中的raw_input()一样，而py2中也有input()，输入字符串要带引号，数字输出相应的数字类型
+
+py2以前没有布尔型，0表示False，用1表示True；Python3 把 True 和 False 定义成关键字，它们的值还是 1 和 0，可以和数字运算。
+
+py2中range()直接生成列表（量大占内存死机），py3中只有range()和py2中还有的xrang()都只生成一个生成器(一个计算方法，不占内存)。
+
+py2的除法中不是浮点数则只返回商，py3除法返回值正常。
+
+在Python2中long是比int取值范围更大的整数，Python3中取消了long类型，int的取值范围扩大到之前的long类型范围。
+
+Python 2 中任意两个对象都可以比较，11 < 'test'返回True。
+
+相同类型的对象（实例），bai如果是数字型（int/float/long/complex)，则按照简单的大小来比较；
+如果是非数字型，且类（型）中定义了__cmp__（含__gt__,__lt__等）则按照__cmp__来比较，否则按照地址（id)来比较
+不同类型的对象（实例），如果其中一个比较对象是数字型（int/float/long/complex等），则数字型的对象<其它非数字型的对象；
+如果两个都是非数字型的对象，则按照类型名的顺序比较，按照tuple > str > list > dict
+对于自定义的类（型）实例，如果继承自基本类型，则按照基本类型的规则比较。
+bool类型是int的子类，且True=1, False=0。
+
+
+

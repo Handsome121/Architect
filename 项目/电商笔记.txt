@@ -1,0 +1,125 @@
+SPU(抽象)和SKU（具体）难点
+商品首页缓存，将缓存数据单独存储一个库，后台管理系统操作时，直接清除缓存数据库
+数据量大的化如何将数据压缩“COMPRESSOR”:“”
+from django_redis.compressors.zlib import ZlibCompressor/在settings中配置
+商品详情页缓存
+局部缓存
+key="good_detail_%s"%(sku_id)
+自定义缓存装饰器
+键的设置，前缀加后缀，前缀是缓存哪种类型gd，后缀是具体sku_id,从需要查询的参数中拿
+装饰器中传入缓存的数据库名，缓存的有效期
+三层装饰器
+
+@cache_check(key_prefix='gd',key_param='sku_id',cache='caceh_detail',expire=30)
+
+def cache_check(**cache_kwargs)
+	def _cache_check(func)
+		def wrapper(self,request,*args,**kwargs):
+			cache = caches['default']
+			if 'cache' in cache_kwargs:
+				cache = caches[cache_kwargs[cache]]	
+			key_prefix=cache_kwargs['key_profix']
+			key_param=cache_kwargs['key_param']
+			expire = cache_kwargs.get('expire',30)
+			 if key_param not in kwargs:
+				raise
+			cache_key=key_prefix+str(kwargs[key_param])
+			res=cache.get(cache_key)
+			if res:
+			    print('cache is %s'%(cache_key))
+			    return res
+			res=fun(self,request,*args,**kwargs)
+			cache.set(cache_key,res,expire)
+			return res 
+		return wrapper
+	return  _cache_check
+判断redis中有没有这个值？有从缓存中拿，没有，走视图函数从数据库中拿，拿了之后，缓存到redis中
+
+
+数据库表设计范式
+	范式 - 设计标准
+	作用：去冗余
+	
+	第一范式：字段
+		联系地址 - 省市电话......
+	第二范式：表结构-表中的字段必须是完全依赖于全部主键（非主键字段与主键之间的关系）
+	
+	第三范式：表结构-非主键字段之间的关系
+
+	反范式：增加冗余-更优的查询效率-聚合变简单查询
+		增加冗余-还原数据的真实性-订单
+
+（1）简单归纳：
+
+　　第一范式（1NF）：字段不可分；
+　　第二范式（2NF）：有主键，非主键字段依赖主键；
+　　第三范式（3NF）：非主键字段不能相互依赖。
+
+（2）解释：
+
+　　1NF：原子性。 字段不可再分,否则就不是关系数据库;；
+　　2NF：唯一性 。一个表只说明一个事物；
+　　3NF：每列都与主键有直接关系，不存在传递依赖。
+
+首页商品
+	1、怎么存？
+	cache_page(600,cache='goods')  服务器 + 浏览器双缓存
+	由于cache_page同时也开启了浏览器缓存，我司领导不同意出现部分用户【谷歌（不拿cache-control）,火狐浏览器（一定有浏览器缓存）】看到的数据跟数据不一致的，我们采取		
+	了重构该装饰器的方案
+	2、怎么删？
+	admin-调研源码发现，admin增删改会调用admin.ModelAdmin的save_model和delete_model;在该方法下触发删除缓存
+	相关代码
+	caches['goods'].clear()
+
+详情页
+	if cache.get(key):
+	    return
+	else:
+	    orm
+	1、存储  自制装饰器
+	2、删除  同首页
+	精准删除
+	def delete_goods_detail_cache(self,sku_id):
+		cache_key='gd%s'%(sku_id)
+		GD_CACHES.delete(cache_key)
+
+购物车
+	请求量大，数据量大，价值相对较低，使用redis来存储
+	开始考虑用字典存储，重复数据多，数据冗余大
+
+	string & hash
+	string:r.set(cart_id,json.dumps({sku_id:['count','selected']}))开发成本低，使用cache_set免去自己序列化的编写，并且还提供整体的压缩机制
+
+	cache.set(cart_id,{sku_id:['count','selected']})
+	
+	hash:r.hset(cart_id,sku_id,json.dumps({sku_id:['count','selected']}))
+	
+
+	登录 & 非登录
+	
+	1、登录 -> redis
+	2、非登录 ->浏览器存 ->本地存储
+	
+	合并？
+	    登陆时    浏览器购物车 合并到 redis
+	    skuid=3 count=10
+	               3              5
+	    max[最大值]   sum
+
+	    开压缩，数据量大时可以压缩数据
+	    cache_set(key,value,)默认300s 不符合实际场景
+	    数据库配置的时候加一个timeout:None,#cache存数据时，默认是无过期时间
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
